@@ -3,15 +3,28 @@ from urllib.parse import unquote
 from collections import Counter
 from math import log2
 
+# Hàm parse: chuyển dòng log thành dict (bắt buộc cho hệ thống hoạt động)
+def parse(line):
+    m = re.match(r'(\S+) - - \[.*?\] "(\S+) (.*?) HTTP/\d\.\d" (\d+)', line)
+    if not m: return None
+    ip, method, uri, status = m.groups()
+    return {
+        "ip": ip,
+        "method": method.lower(),
+        "uri": uri,
+        "status": int(status)
+    }
+
+# Hàm tính độ hỗn loạn của chuỗi (entropy)
 def shannon_entropy(data):
-    """Tính entropy (độ hỗn loạn) của chuỗi, càng cao càng lạ."""
     if not data: return 0
     p, lns = Counter(data), float(len(data))
-    return -sum((count/lns) * log2(count/lns) for count in p.values())
+    return -sum((count / lns) * log2(count / lns) for count in p.values())
 
+# Hàm trích xuất đặc trưng từ mỗi dòng log đã parse
 def features(row):
     uri = unquote(row["uri"].lower())
-    
+
     # Đếm ký tự encode phổ biến & số lần xuất hiện
     pct_total = uri.count("%")
     pct27 = uri.count("%27")  # dấu nháy đơn
@@ -21,22 +34,21 @@ def features(row):
     pct2f = uri.count("%2f")  # /
     pct_hex = len(re.findall(r"%[0-9a-f]{2}", uri))  # số ký tự encode hex bất kỳ
 
-    # Thống kê dấu hiệu về tham số, cấu trúc path
+    # Thống kê tham số, path
     param_count = uri.count("=")
     question_mark = uri.count("?")
     slash_count = uri.count("/")
     path_depth = len([x for x in uri.split("/") if x])
 
-    # Đặc trưng độ dài, entropy, tỷ lệ ký tự lạ, số chữ số
+    # Đặc trưng độ dài, entropy, ký tự lạ, chữ số
     total_len = len(uri)
     entropy = shannon_entropy(uri)
     non_alnum_ratio = sum(1 for c in uri if not c.isalnum()) / (total_len or 1)
     digit_count = sum(c.isdigit() for c in uri)
 
-    # Method HTTP (nếu parse được)
     method = row.get("method", "GET")
-    
-    # Keyword & pattern flags – phát hiện dấu hiệu tấn công
+
+    # Từ khóa nguy hiểm (SQLi, XSS, Command Injection...)
     keywords = [
         "select", "union", "drop", "insert", "update", "delete", "from",
         "script", "<img", "onerror", "alert", "eval", "base64", "admin", "passwd", "shadow",
@@ -44,7 +56,7 @@ def features(row):
     ]
     features_dict = {f"kw_{k}": int(k in uri) for k in keywords}
 
-    # Đặc trưng tấn công nổi bật
+    # Các đặc trưng tấn công nâng cao
     features_dict.update({
         "has_script_tag": int(bool(re.search(r"<\s*script", uri))),
         "has_iframe": int("<iframe" in uri),
@@ -61,7 +73,7 @@ def features(row):
         "has_wget": int("wget" in uri),
     })
 
-    # Gộp đặc trưng về cấu trúc, encode, ký tự
+    # Tổng hợp tất cả
     features_dict.update({
         "uri_len": total_len,
         "digit_count": digit_count,
