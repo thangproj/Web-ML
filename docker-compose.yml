@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  flask-app:
+    build:
+      context: ./docker/flask
+    container_name: flask-app
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs        # Chia sẻ log giữa flask và consumer
+    restart: unless-stopped
+
+  consumer:
+    build:
+      context: ./docker/consumer
+    container_name: consumer
+    depends_on:
+      - flask-app
+    volumes:
+      - ./logs:/app/logs        # Đọc log để phân tích
+      - ./docker/consumer:/app  # Nơi chứa model.pkl, realtime_detect.py
+    restart: unless-stopped
