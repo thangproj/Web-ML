@@ -115,10 +115,3 @@ web-anomaly-detector/
 - Các thư viện: pandas, joblib, scikit-learn, flask
 
 ---
-
-## 8. Liên hệ
-
-- Author: [Tên của bạn]
-- Email: [Email liên hệ]
-
----
